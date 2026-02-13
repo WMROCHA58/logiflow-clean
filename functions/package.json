@@ -1,0 +1,22 @@
+{
+  "name": "functions",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npm run build && firebase deploy --only functions"
+  },
+  "dependencies": {
+    "@google-cloud/vision": "^4.3.0",
+    "firebase-admin": "^12.5.0",
+    "firebase-functions": "^7.0.5",
+    "openai": "^6.21.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

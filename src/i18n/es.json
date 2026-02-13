@@ -1,0 +1,27 @@
+{
+  "app": {
+    "title": "LogiFlow",
+    "loggedAs": "Conectado como"
+  },
+  "buttons": {
+    "logout": "Salir",
+    "scan": "Escanear etiqueta",
+    "voice": "Hablar con LogiFlow",
+    "sendToList": "Enviar a la lista",
+    "cancel": "Cancelar",
+    "markSelected": "Marcar seleccionadas como completadas"
+  },
+  "sections": {
+    "pending": "Pendientes",
+    "completed": "Completadas"
+  },
+  "voice": {
+    "noPending": "No tienes entregas pendientes",
+    "onePending": "Tienes una entrega pendiente",
+    "manyPending": "Tienes {{count}} entregas pendientes",
+    "nextDelivery": "Siguiente entrega para {{name}}. Dirección: {{address}}",
+    "completed": "Entrega marcada como completada",
+    "repeatNone": "Ninguna dirección ha sido mencionada aún",
+    "notRecognized": "Comando no reconocido"
+  }
+}

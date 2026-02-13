@@ -1,0 +1,27 @@
+{
+  "app": {
+    "title": "LogiFlow",
+    "loggedAs": "Logged in as"
+  },
+  "buttons": {
+    "logout": "Logout",
+    "scan": "Scan label",
+    "voice": "Talk to LogiFlow",
+    "sendToList": "Send to list",
+    "cancel": "Cancel",
+    "markSelected": "Mark selected as completed"
+  },
+  "sections": {
+    "pending": "Pending",
+    "completed": "Completed"
+  },
+  "voice": {
+    "noPending": "You have no pending deliveries",
+    "onePending": "You have one pending delivery",
+    "manyPending": "You have {{count}} pending deliveries",
+    "nextDelivery": "Next delivery for {{name}}. Address: {{address}}",
+    "completed": "Delivery marked as completed",
+    "repeatNone": "No address has been spoken yet",
+    "notRecognized": "Command not recognized"
+  }
+}
