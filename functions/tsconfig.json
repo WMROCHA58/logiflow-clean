@@ -9,5 +9,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": [
+    "src/__STABLE_BACKUP__",
+    "src/__STABLE_BACKUP__/**/*"
+  ]
 }

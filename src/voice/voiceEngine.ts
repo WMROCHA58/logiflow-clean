@@ -1,49 +1,60 @@
 type StartCallback = (text: string) => void;
 type ErrorCallback = (error: any) => void;
 
-class VoiceEngine {
-  private recognition: any;
+export class VoiceEngine {
+  private recognition: any = null;
   private isListening = false;
   private isSpeaking = false;
-  private shouldRestart = false;
+  private shouldKeepListening = false;
   private onResultCallback?: StartCallback;
   private onErrorCallback?: ErrorCallback;
 
   constructor() {
+    this.initRecognition();
+  }
+
+  private initRecognition() {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      console.error("SpeechRecognition não suportado neste navegador.");
+      console.error("SpeechRecognition não suportado.");
       return;
     }
 
     this.recognition = new SpeechRecognition();
-    this.recognition.lang = navigator.language || "pt-BR";
-    this.recognition.continuous = true;
+    this.recognition.lang = navigator.language || "en-US";
+
+    // 🔥 ANDROID SAFE MODE
+    this.recognition.continuous = false;
     this.recognition.interimResults = false;
 
     this.recognition.onresult = (event: any) => {
-      if (this.isSpeaking) return;
+      const text = event.results[0][0].transcript;
 
-      const text = event.results[event.results.length - 1][0].transcript;
       if (this.onResultCallback) {
         this.onResultCallback(text);
-      }
-    };
-
-    this.recognition.onerror = (event: any) => {
-      this.isListening = false;
-      if (this.onErrorCallback) {
-        this.onErrorCallback(event);
       }
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
 
-      if (this.shouldRestart && !this.isSpeaking) {
+      // 🔥 RESTART AUTOMÁTICO
+      if (this.shouldKeepListening && !this.isSpeaking) {
+        this.startInternal();
+      }
+    };
+
+    this.recognition.onerror = (event: any) => {
+      this.isListening = false;
+
+      if (this.onErrorCallback) {
+        this.onErrorCallback(event);
+      }
+
+      if (this.shouldKeepListening) {
         this.startInternal();
       }
     };
@@ -56,9 +67,7 @@ class VoiceEngine {
     try {
       this.recognition.start();
       this.isListening = true;
-    } catch (err) {
-      console.error("Erro ao iniciar reconhecimento:", err);
-    }
+    } catch {}
   }
 
   start(onResult: StartCallback, onError?: ErrorCallback) {
@@ -66,7 +75,7 @@ class VoiceEngine {
 
     this.onResultCallback = onResult;
     this.onErrorCallback = onError;
-    this.shouldRestart = true;
+    this.shouldKeepListening = true;
 
     this.startInternal();
   }
@@ -74,46 +83,33 @@ class VoiceEngine {
   stop() {
     if (!this.recognition) return;
 
-    this.shouldRestart = false;
-    this.recognition.stop();
+    this.shouldKeepListening = false;
+
+    try {
+      this.recognition.stop();
+    } catch {}
+
     this.isListening = false;
   }
 
   speak(text: string) {
-    if (!("speechSynthesis" in window)) {
-      console.error("speechSynthesis não suportado.");
-      return;
-    }
+    if (!("speechSynthesis" in window)) return;
 
-    try {
-      this.isSpeaking = true;
+    this.isSpeaking = true;
 
-      // pausa reconhecimento enquanto fala
-      if (this.isListening) {
-        this.recognition.stop();
-        this.isListening = false;
-      }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = navigator.language || "en-US";
 
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = navigator.language || "pt-BR";
-      utterance.rate = 1;
-      utterance.pitch = 1;
-
-      utterance.onend = () => {
-        this.isSpeaking = false;
-
-        if (this.shouldRestart) {
-          this.startInternal();
-        }
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } catch (err) {
-      console.error("Erro ao falar:", err);
+    utterance.onend = () => {
       this.isSpeaking = false;
-    }
+
+      // 🔥 VOLTA A OUVIR APÓS FALAR
+      if (this.shouldKeepListening) {
+        this.startInternal();
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
   }
 
   cancelSpeak() {
@@ -123,5 +119,3 @@ class VoiceEngine {
     }
   }
 }
-
-export const voiceEngine = new VoiceEngine();
