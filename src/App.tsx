@@ -3,7 +3,8 @@ import { auth } from "./firebase";
 import Login from "./Login";
 import { onAuthStateChanged,signOut } from "firebase/auth";
 import { collection,addDoc,getDocs,query,where,Timestamp,updateDoc,doc,deleteDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { db,functions } from "./firebase";
+import { httpsCallable } from "firebase/functions";
 import { CameraScanner } from "./components/CameraScanner";
 import { VoiceEngine } from "./voice/voiceEngine";
 import { initUserContext } from "./modules/userContext";
@@ -11,7 +12,7 @@ import { detectUserLanguage } from "./i18n/languages";
 import { t } from "./i18n/translator";
 
 type DeliveryStatus="concluida"|"nao_realizada";
-type Delivery={id:string;name:string;street:string;district?:string;city:string;state?:string;postalCode?:string;country?:string;phone?:string;status:DeliveryStatus};
+type Delivery={id:string;name:string;street:string;district?:string;city:string;state?:string;postalCode?:string;country?:string;phone?:string;latitude?:number;longitude?:number;status:DeliveryStatus};
 
 export default function App(){
 
@@ -48,6 +49,25 @@ deliveriesRef.current=list;
 
 async function saveDelivery(data:any){
 if(!user)return;
+
+let latitude:number|undefined;
+let longitude:number|undefined;
+
+try{
+const geocodeFunction=httpsCallable(functions,"geocodeAddress");
+const geoResult:any=await geocodeFunction({
+street:data?.street||"",
+city:data?.city||"",
+state:data?.state||"",
+postalCode:data?.postalCode||"",
+country:data?.country||""
+});
+latitude=geoResult.data.latitude;
+longitude=geoResult.data.longitude;
+}catch(e){
+console.error("Erro geocode:",e);
+}
+
 await addDoc(collection(db,"deliveries"),{
 userId:user.uid,
 name:data?.name||"",
@@ -58,9 +78,12 @@ state:data?.state||"",
 postalCode:data?.postalCode||"",
 country:data?.country||"",
 phone:data?.phone||"",
+latitude:latitude||null,
+longitude:longitude||null,
 status:"nao_realizada",
 createdAt:Timestamp.now()
 });
+
 setPreviewData(null);
 await loadDeliveries(user.uid);
 }
@@ -86,97 +109,46 @@ async function logout(){await signOut(auth);}
 
 function detectIntent(text:string):"NEXT"|"REPEAT"|"COUNT"|null{
 const t=text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-
-if(
-t.includes("quantas")||t.includes("faltam")||t.includes("restam")||
-t.includes("how many")||t.includes("pending")||
-t.includes("cuantas")||t.includes("cuántas")||t.includes("pendientes")
-)return"COUNT";
-
-if(
-t.includes("proxima")||t.includes("seguinte")||
-t.includes("next")||
-t.includes("siguiente")
-)return"NEXT";
-
-if(
-t.includes("repetir")||t.includes("de novo")||
-t.includes("repeat")||
-t.includes("direccion")||t.includes("dirección")
-)return"REPEAT";
-
+if(t.includes("quantas")||t.includes("faltam")||t.includes("restam")||t.includes("how many")||t.includes("pending")||t.includes("cuantas")||t.includes("cuántas")||t.includes("pendientes"))return"COUNT";
+if(t.includes("proxima")||t.includes("seguinte")||t.includes("next")||t.includes("siguiente"))return"NEXT";
+if(t.includes("repetir")||t.includes("de novo")||t.includes("repeat")||t.includes("direccion")||t.includes("dirección"))return"REPEAT";
 return null;
 }
 
 function handleVoice(){
-if(isProcessingVoiceRef.current)return;
-if(!voiceRef.current)return;
-
+if(isProcessingVoiceRef.current||!voiceRef.current)return;
 isProcessingVoiceRef.current=true;
 
 voiceRef.current.start((res:string)=>{
-
-if(!res||res.trim()===""){return;}
-
+if(!res||res.trim()==="")return;
 const intent=detectIntent(res);
 
 if(intent==="COUNT"){
 const p=deliveriesRef.current.filter(d=>d.status==="nao_realizada").length;
-voiceRef.current?.speak(
-userLang==="en"
-?`You have ${p} pending deliveries`
-:userLang==="es"
-?`Tienes ${p} entregas pendientes`
-:`Você tem ${p} entregas pendentes`
-);
+voiceRef.current?.speak(userLang==="en"?`You have ${p} pending deliveries`:userLang==="es"?`Tienes ${p} entregas pendientes`:`Você tem ${p} entregas pendentes`);
 }
 
 else if(intent==="NEXT"){
 const next=deliveriesRef.current.find(d=>d.status==="nao_realizada");
 if(!next){
-voiceRef.current?.speak(
-userLang==="en"
-?"No pending deliveries"
-:userLang==="es"
-?"No hay entregas pendientes"
-:"Não há entregas pendentes"
-);
+voiceRef.current?.speak(userLang==="en"?"No pending deliveries":userLang==="es"?"No hay entregas pendientes":"Não há entregas pendentes");
 }else{
-voiceRef.current?.speak(
-userLang==="en"
-?`Next delivery: ${next.name}. ${next.street}, ${next.city}`
-:userLang==="es"
-?`Siguiente entrega: ${next.name}. ${next.street}, ${next.city}`
-:`Próxima entrega: ${next.name}. ${next.street}, ${next.city}`
-);
+voiceRef.current?.speak(userLang==="en"?`Next delivery: ${next.name}. ${next.street}, ${next.city}`:userLang==="es"?`Siguiente entrega: ${next.name}. ${next.street}, ${next.city}`:`Próxima entrega: ${next.name}. ${next.street}, ${next.city}`);
 }
 }
 
 else if(intent==="REPEAT"){
 const next=deliveriesRef.current.find(d=>d.status==="nao_realizada");
 if(next){
-voiceRef.current?.speak(
-userLang==="en"
-?`Repeating: ${next.name}. ${next.street}, ${next.city}`
-:userLang==="es"
-?`Repitiendo: ${next.name}. ${next.street}, ${next.city}`
-:`Repetindo: ${next.name}. ${next.street}, ${next.city}`
-);
+voiceRef.current?.speak(userLang==="en"?`Repeating: ${next.name}. ${next.street}, ${next.city}`:userLang==="es"?`Repitiendo: ${next.name}. ${next.street}, ${next.city}`:`Repetindo: ${next.name}. ${next.street}, ${next.city}`);
 }
 }
 
 else{
-voiceRef.current?.speak(
-userLang==="en"
-?"Command not recognized"
-:userLang==="es"
-?"Comando no reconocido"
-:"Comando não reconhecido"
-);
+voiceRef.current?.speak(userLang==="en"?"Command not recognized":userLang==="es"?"Comando no reconocido":"Comando não reconhecido");
 }
 
 },()=>{});
-
 }
 
 if(loading)return <div style={{padding:30}}>Loading...</div>;
