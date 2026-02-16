@@ -73,8 +73,9 @@ export function CameraScanner({ onCapture, onClose }: Props) {
       return;
     }
 
-    const cropWidth = vw * 0.75;
-    const cropHeight = cropWidth * (3 / 4);
+    // 🔥 Área horizontal proporcional (mantendo lógica original)
+    const cropWidth = vw * 0.85;
+    const cropHeight = cropWidth * (9 / 16);
 
     const startX = (vw - cropWidth) / 2;
     const startY = (vh - cropHeight) / 2;
@@ -82,7 +83,8 @@ export function CameraScanner({ onCapture, onClose }: Props) {
     canvas.width = 1280;
     canvas.height = cropHeight * (1280 / cropWidth);
 
-    ctx.filter = "contrast(1.2) brightness(1.05)";
+    ctx.filter = "contrast(1.15) brightness(1.05)";
+
     ctx.drawImage(
       video,
       startX,
@@ -99,8 +101,6 @@ export function CameraScanner({ onCapture, onClose }: Props) {
 
     try {
       const scanLabel = httpsCallable(functions, "scanLabel");
-
-      // 🔥 CORREÇÃO CRÍTICA: nome correto do campo
       const res: any = await scanLabel({ imageBase64: base64 });
 
       if (!res?.data) {
@@ -133,10 +133,11 @@ export function CameraScanner({ onCapture, onClose }: Props) {
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          opacity: 0.9
+          opacity: 0.95
         }}
       />
 
+      {/* 🟢 MOLDURA HORIZONTAL (SÓ VISUAL) */}
       <div
         style={{
           position: "absolute",
@@ -149,15 +150,16 @@ export function CameraScanner({ onCapture, onClose }: Props) {
       >
         <div
           style={{
-            width: "80%",
-            maxWidth: 340,
-            aspectRatio: "4/3",
+            width: "90%",
+            maxWidth: 560,
+            aspectRatio: "16 / 9",
             border: "3px solid #22c55e",
             borderRadius: 20
           }}
         />
       </div>
 
+      {/* 🔵 BOTÃO CAPTURA */}
       <button
         onClick={capture}
         disabled={loading}
@@ -174,6 +176,7 @@ export function CameraScanner({ onCapture, onClose }: Props) {
         }}
       />
 
+      {/* ❌ FECHAR */}
       <button
         onClick={onClose}
         style={{

@@ -1,7 +1,6 @@
 {
   "name": "functions",
   "private": true,
-  "type": "module",
   "engines": {
     "node": "20"
   },

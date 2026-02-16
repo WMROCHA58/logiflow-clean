@@ -1,7 +1,6 @@
 import { onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import admin from "firebase-admin";
-import fetch from "node-fetch";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -9,7 +8,10 @@ if (!admin.apps.length) {
 
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 
-/* ===================== SCAN LABEL ===================== */
+
+// ======================================================
+// ===================== SCAN LABEL ======================
+// ======================================================
 
 export const scanLabel = onCall(
   {
@@ -21,8 +23,12 @@ export const scanLabel = onCall(
   async (request) => {
     try {
       const { imageBase64 } = request.data;
-      if (!imageBase64) throw new Error("imageBase64 não fornecido");
 
+      if (!imageBase64) {
+        throw new Error("imageBase64 não fornecido");
+      }
+
+      // ---------- GOOGLE VISION ----------
       const visionModule = await import("@google-cloud/vision");
       const vision = new visionModule.ImageAnnotatorClient();
 
@@ -33,14 +39,28 @@ export const scanLabel = onCall(
       const extractedText =
         result.textAnnotations?.[0]?.description || "";
 
-      if (!extractedText)
+      if (!extractedText) {
         throw new Error("Nenhum texto detectado");
+      }
 
-      const cepMatch = extractedText.match(/\b\d{5}-?\d{3}\b/);
+      // ---------- LIMPEZA DE TEXTO ----------
+      const cleanedText = extractedText
+        .replace(/QR[\s\S]*$/gi, "")
+        .replace(/DATA\s*ENTREGA.*$/gim, "")
+        .replace(/REMETENTE.*$/gim, "")
+        .replace(/PEDIDO.*$/gim, "")
+        .replace(/MAGALU.*$/gim, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      const lines = cleanedText.split("\n");
+
+      // ---------- CEP ----------
+      const cepMatch = cleanedText.match(/\b\d{5}-?\d{3}\b/);
       const forcedCEP = cepMatch ? cepMatch[0] : "";
 
+      // ---------- BAIRRO ----------
       let forcedDistrict = "";
-      const lines = extractedText.split("\n");
 
       for (const line of lines) {
         const l = line.toLowerCase();
@@ -50,11 +70,12 @@ export const scanLabel = onCall(
           l.includes("jardim") ||
           l.includes("vila")
         ) {
-          forcedDistrict = line.trim();
+          forcedDistrict = line.replace(/bairro[:\s]*/i, "").trim();
           break;
         }
       }
 
+      // ---------- OPENAI ----------
       const openaiModule = await import("openai");
       const OpenAI = openaiModule.default;
 
@@ -68,21 +89,46 @@ export const scanLabel = onCall(
         messages: [
           {
             role: "system",
-            content:
-              "Extraia os dados da etiqueta e retorne SOMENTE JSON válido com: name, street, district, city, state, postalCode, phone, country.",
+            content: `
+Extraia SOMENTE os dados do DESTINATÁRIO de uma etiqueta brasileira.
+
+IGNORE COMPLETAMENTE:
+- QR code
+- remetente
+- data de entrega
+- códigos de pedido
+- textos promocionais
+
+Formato típico:
+Nome
+Rua / Quadra / Lote / DF / Número
+Bairro
+Cidade - Estado
+CEP
+Telefone
+
+Retorne APENAS JSON válido com:
+name, street, district, city, state, postalCode, phone, country
+`,
           },
           {
             role: "user",
-            content: extractedText,
+            content: cleanedText,
           },
         ],
       });
 
       const content = completion.choices[0]?.message?.content;
-      const jsonMatch = content?.match(/\{[\s\S]*\}/);
 
-      if (!jsonMatch)
-        throw new Error("OpenAI não retornou JSON");
+      if (!content) {
+        throw new Error("Resposta vazia da OpenAI");
+      }
+
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        throw new Error("JSON inválido");
+      }
 
       const parsed = JSON.parse(jsonMatch[0]);
 
@@ -90,9 +136,9 @@ export const scanLabel = onCall(
         ...parsed,
         postalCode: parsed.postalCode || forcedCEP,
         district: parsed.district || forcedDistrict,
+        debugRawText: cleanedText,
         debugLines: lines,
       };
-
     } catch (error: any) {
       console.error("SCAN ERROR:", error);
       throw new Error(error.message || "Erro interno");
@@ -100,7 +146,10 @@ export const scanLabel = onCall(
   }
 );
 
-/* ===================== GEOCODE ROBUSTO ===================== */
+
+// ======================================================
+// ================== GEOCODE ADDRESS ===================
+// ======================================================
 
 export const geocodeAddress = onCall(
   {
@@ -117,7 +166,6 @@ export const geocodeAddress = onCall(
         return { latitude: null, longitude: null };
       }
 
-      // 🔹 Normalização leve
       function clean(text: string = "") {
         return text
           .replace(/LIV/gi, "")
@@ -147,6 +195,8 @@ export const geocodeAddress = onCall(
           },
         });
 
+        if (!response.ok) return null;
+
         const result: any = await response.json();
 
         if (!result || result.length === 0) return null;
@@ -157,7 +207,7 @@ export const geocodeAddress = onCall(
         };
       }
 
-      // 🔹 Tentativa 1 — CEP
+      // 1️⃣ CEP
       if (postalCode) {
         const geoCep = await search(
           `${postalCode}, ${city}, ${country || ""}`
@@ -165,7 +215,7 @@ export const geocodeAddress = onCall(
         if (geoCep) return geoCep;
       }
 
-      // 🔹 Tentativa 2 — Rua + Bairro
+      // 2️⃣ Rua + Bairro
       const geoStreet = await search(
         `${street}, ${district || ""}, ${city}, ${state || ""}, ${
           country || ""
@@ -173,14 +223,13 @@ export const geocodeAddress = onCall(
       );
       if (geoStreet) return geoStreet;
 
-      // 🔹 Tentativa 3 — Cidade
+      // 3️⃣ Cidade
       const geoCity = await search(
         `${city}, ${state || ""}, ${country || ""}`
       );
       if (geoCity) return geoCity;
 
       return { latitude: null, longitude: null };
-
     } catch (error) {
       console.error("GEOCODE ERROR:", error);
       return { latitude: null, longitude: null };
