@@ -10,6 +10,7 @@ type Props = {
 export function CameraScanner({ onCapture, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -23,17 +24,30 @@ export function CameraScanner({ onCapture, onClose }: Props) {
           }
         });
 
+        streamRef.current = stream;
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play();
+
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().catch(() => {});
+          };
 
           const track = stream.getVideoTracks()[0];
           const capabilities: any = track.getCapabilities?.();
 
-          if (capabilities?.focusMode) {
-            track.applyConstraints({
-              advanced: [{ focusMode: "continuous" }]
-            } as any);
+          if (capabilities) {
+            const constraints: any = { advanced: [] };
+
+            if (capabilities.focusMode) {
+              constraints.advanced.push({ focusMode: "continuous" });
+            }
+
+            if (capabilities.zoom) {
+              constraints.advanced.push({ zoom: capabilities.zoom.max * 0.6 });
+            }
+
+            track.applyConstraints(constraints);
           }
         }
       } catch (err) {
@@ -45,8 +59,10 @@ export function CameraScanner({ onCapture, onClose }: Props) {
     startCamera();
 
     return () => {
-      const stream = videoRef.current?.srcObject as MediaStream;
-      stream?.getTracks().forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
     };
   }, []);
 
@@ -73,17 +89,21 @@ export function CameraScanner({ onCapture, onClose }: Props) {
       return;
     }
 
-    // 🔥 Área horizontal proporcional (mantendo lógica original)
+    // Área horizontal proporcional (mantendo lógica original)
     const cropWidth = vw * 0.85;
     const cropHeight = cropWidth * (9 / 16);
 
     const startX = (vw - cropWidth) / 2;
     const startY = (vh - cropHeight) / 2;
 
-    canvas.width = 1280;
-    canvas.height = cropHeight * (1280 / cropWidth);
+    // Resolução otimizada para OCR (1024px de largura)
+    canvas.width = 1024;
+    canvas.height = cropHeight * (1024 / cropWidth);
 
-    ctx.filter = "contrast(1.15) brightness(1.05)";
+    // Filtro aprimorado para melhor leitura de etiquetas
+    ctx.filter = "contrast(1.8) brightness(1.15) grayscale(0.3)";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     ctx.drawImage(
       video,
@@ -97,7 +117,8 @@ export function CameraScanner({ onCapture, onClose }: Props) {
       canvas.height
     );
 
-    const base64 = canvas.toDataURL("image/jpeg", 0.95).split(",")[1];
+    // Qualidade JPEG reduzida para 0.8 (equilíbrio entre tamanho e qualidade)
+    const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
 
     try {
       const scanLabel = httpsCallable(functions, "scanLabel");
@@ -137,7 +158,7 @@ export function CameraScanner({ onCapture, onClose }: Props) {
         }}
       />
 
-      {/* 🟢 MOLDURA HORIZONTAL (SÓ VISUAL) */}
+      {/* MOLDURA HORIZONTAL (SÓ VISUAL) */}
       <div
         style={{
           position: "absolute",
@@ -159,7 +180,7 @@ export function CameraScanner({ onCapture, onClose }: Props) {
         />
       </div>
 
-      {/* 🔵 BOTÃO CAPTURA */}
+      {/* BOTÃO CAPTURA */}
       <button
         onClick={capture}
         disabled={loading}
@@ -176,7 +197,7 @@ export function CameraScanner({ onCapture, onClose }: Props) {
         }}
       />
 
-      {/* ❌ FECHAR */}
+      {/* FECHAR */}
       <button
         onClick={onClose}
         style={{

@@ -1,12 +1,18 @@
-import { onCall } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import admin from "firebase-admin";
+import Stripe from "stripe";
+import OpenAI from "openai";
+import { ImageAnnotatorClient } from "@google-cloud/vision";
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
+const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 
 // ======================================================
@@ -14,225 +20,293 @@ const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 // ======================================================
 
 export const scanLabel = onCall(
-  {
-    region: "us-central1",
-    secrets: [OPENAI_API_KEY],
-    memory: "512MiB",
-    timeoutSeconds: 120,
-  },
-  async (request) => {
-    try {
-      const { imageBase64 } = request.data;
+{
+  region: "us-central1",
+  secrets: [OPENAI_API_KEY],
+  memory: "512MiB",
+  timeoutSeconds: 120,
+},
+async (request) => {
 
-      if (!imageBase64) {
-        throw new Error("imageBase64 não fornecido");
-      }
+  const { imageBase64 } = request.data;
 
-      // ---------- GOOGLE VISION ----------
-      const visionModule = await import("@google-cloud/vision");
-      const vision = new visionModule.ImageAnnotatorClient();
-
-      const [result] = await vision.textDetection({
-        image: { content: imageBase64 },
-      });
-
-      const extractedText =
-        result.textAnnotations?.[0]?.description || "";
-
-      if (!extractedText) {
-        throw new Error("Nenhum texto detectado");
-      }
-
-      // ---------- LIMPEZA DE TEXTO ----------
-      const cleanedText = extractedText
-        .replace(/QR[\s\S]*$/gi, "")
-        .replace(/DATA\s*ENTREGA.*$/gim, "")
-        .replace(/REMETENTE.*$/gim, "")
-        .replace(/PEDIDO.*$/gim, "")
-        .replace(/MAGALU.*$/gim, "")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-
-      const lines = cleanedText.split("\n");
-
-      // ---------- CEP ----------
-      const cepMatch = cleanedText.match(/\b\d{5}-?\d{3}\b/);
-      const forcedCEP = cepMatch ? cepMatch[0] : "";
-
-      // ---------- BAIRRO ----------
-      let forcedDistrict = "";
-
-      for (const line of lines) {
-        const l = line.toLowerCase();
-        if (
-          l.includes("bairro") ||
-          l.includes("chácara") ||
-          l.includes("jardim") ||
-          l.includes("vila")
-        ) {
-          forcedDistrict = line.replace(/bairro[:\s]*/i, "").trim();
-          break;
-        }
-      }
-
-      // ---------- OPENAI ----------
-      const openaiModule = await import("openai");
-      const OpenAI = openaiModule.default;
-
-      const client = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-
-      const completion = await client.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content: `
-Extraia SOMENTE os dados do DESTINATÁRIO de uma etiqueta brasileira.
-
-IGNORE COMPLETAMENTE:
-- QR code
-- remetente
-- data de entrega
-- códigos de pedido
-- textos promocionais
-
-Formato típico:
-Nome
-Rua / Quadra / Lote / DF / Número
-Bairro
-Cidade - Estado
-CEP
-Telefone
-
-Retorne APENAS JSON válido com:
-name, street, district, city, state, postalCode, phone, country
-`,
-          },
-          {
-            role: "user",
-            content: cleanedText,
-          },
-        ],
-      });
-
-      const content = completion.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error("Resposta vazia da OpenAI");
-      }
-
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-
-      if (!jsonMatch) {
-        throw new Error("JSON inválido");
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      return {
-        ...parsed,
-        postalCode: parsed.postalCode || forcedCEP,
-        district: parsed.district || forcedDistrict,
-        debugRawText: cleanedText,
-        debugLines: lines,
-      };
-    } catch (error: any) {
-      console.error("SCAN ERROR:", error);
-      throw new Error(error.message || "Erro interno");
-    }
+  if (!imageBase64) {
+    throw new HttpsError("invalid-argument", "imageBase64 não fornecido");
   }
-);
+
+  const vision = new ImageAnnotatorClient();
+
+  const [result] = await vision.textDetection({
+    image: { content: imageBase64 },
+  });
+
+  const extractedText = result.textAnnotations?.[0]?.description || "";
+
+  if (!extractedText) {
+    throw new HttpsError("internal", "Nenhum texto detectado");
+  }
+
+  const cleanedText = extractedText
+    .replace(/QR[\s\S]*$/gi, "")
+    .replace(/DATA\s*ENTREGA.*$/gim, "")
+    .replace(/REMETENTE.*$/gim, "")
+    .replace(/PEDIDO.*$/gim, "")
+    .replace(/MAGALU.*$/gim, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Extraia SOMENTE os dados do DESTINATÁRIO. Retorne JSON válido com name, street, district, city, state, postalCode, phone, country",
+      },
+      {
+        role: "user",
+        content: cleanedText,
+      },
+    ],
+  });
+
+  const content = completion.choices[0]?.message?.content;
+
+  if (!content) {
+    throw new HttpsError("internal", "Resposta vazia da OpenAI");
+  }
+
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+
+  if (!jsonMatch) {
+    throw new HttpsError("internal", "JSON inválido");
+  }
+
+  return JSON.parse(jsonMatch[0]);
+
+});
 
 
 // ======================================================
-// ================== GEOCODE ADDRESS ===================
+// =================== GEOCODE ADDRESS ==================
 // ======================================================
 
 export const geocodeAddress = onCall(
-  {
-    region: "us-central1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-  },
-  async (request) => {
-    try {
-      let { street, city, state, postalCode, country, district } =
-        request.data;
+{
+  region: "us-central1",
+  memory: "256MiB",
+  timeoutSeconds: 60,
+},
+async (request) => {
 
-      if (!city) {
-        return { latitude: null, longitude: null };
-      }
+  const { street, city, state, postalCode, country } = request.data;
 
-      function clean(text: string = "") {
-        return text
-          .replace(/LIV/gi, "")
-          .replace(/QUADRA/gi, "")
-          .replace(/LOTE/gi, "")
-          .replace(/AO/gi, "")
-          .replace(/\s+/g, " ")
-          .trim();
-      }
+  const queries = [
 
-      street = clean(street);
-      district = clean(district);
+    [street, city, state, postalCode, country || "Brasil"]
+      .filter(Boolean)
+      .join(", "),
 
-      async function search(query: string) {
-        const url =
-          "https://nominatim.openstreetmap.org/search" +
-          "?format=json" +
-          "&limit=1" +
-          "&addressdetails=1" +
-          "&q=" +
-          encodeURIComponent(query);
+    [street, city, state, country || "Brasil"]
+      .filter(Boolean)
+      .join(", "),
 
-        const response = await fetch(url, {
+    [postalCode, city, state, country || "Brasil"]
+      .filter(Boolean)
+      .join(", ")
+
+  ];
+
+  try {
+
+    for (const address of queries) {
+
+      if (!address) continue;
+
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
+        {
           headers: {
-            "User-Agent": "LogiFlow-App/1.0",
-            "Accept-Language": "pt-BR",
-          },
-        });
+            "User-Agent": "LogiFlowApp/1.0"
+          }
+        }
+      );
 
-        if (!response.ok) return null;
+      const data:any = await response.json();
 
-        const result: any = await response.json();
-
-        if (!result || result.length === 0) return null;
+      if (data && data.length > 0) {
 
         return {
-          latitude: parseFloat(result[0].lat),
-          longitude: parseFloat(result[0].lon),
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon)
         };
+
       }
 
-      // 1️⃣ CEP
-      if (postalCode) {
-        const geoCep = await search(
-          `${postalCode}, ${city}, ${country || ""}`
-        );
-        if (geoCep) return geoCep;
-      }
-
-      // 2️⃣ Rua + Bairro
-      const geoStreet = await search(
-        `${street}, ${district || ""}, ${city}, ${state || ""}, ${
-          country || ""
-        }`
-      );
-      if (geoStreet) return geoStreet;
-
-      // 3️⃣ Cidade
-      const geoCity = await search(
-        `${city}, ${state || ""}, ${country || ""}`
-      );
-      if (geoCity) return geoCity;
-
-      return { latitude: null, longitude: null };
-    } catch (error) {
-      console.error("GEOCODE ERROR:", error);
-      return { latitude: null, longitude: null };
     }
+
+    return {
+      latitude: null,
+      longitude: null
+    };
+
+  } catch (error) {
+
+    console.error("Geocode error:", error);
+
+    return {
+      latitude: null,
+      longitude: null
+    };
+
   }
-);
+
+});
+
+
+// ======================================================
+// ================= STRIPE CONFIG ======================
+// ======================================================
+
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY as string);
+}
+
+
+// ======================================================
+// ============== CREATE CHECKOUT SESSION ==============
+// ======================================================
+
+export const createCheckoutSession = onCall(
+{
+  region: "us-central1",
+  secrets: [STRIPE_SECRET_KEY],
+},
+async (request) => {
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Usuário não autenticado");
+  }
+
+  const stripe = getStripe();
+  const userId = request.auth.uid;
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price: "price_1T5R45Fom5lf3GFgEjUGnXPC",
+        quantity: 1,
+      },
+    ],
+    metadata: {
+      userId: userId,
+    },
+    subscription_data: {
+      trial_period_days: 7,
+      metadata: {
+        userId: userId,
+      },
+    },
+    success_url: "https://logiflow-dd382.web.app",
+    cancel_url: "https://logiflow-dd382.web.app",
+  });
+
+  return {
+    url: session.url,
+  };
+
+});
+
+
+// ======================================================
+// ===================== WEBHOOK ========================
+// ======================================================
+
+export const webhookStripe = onRequest(
+{
+  region: "us-central1",
+  secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
+},
+async (req, res) => {
+
+  const stripe = getStripe();
+
+  const sig = req.headers["stripe-signature"] as string;
+
+  if (!sig) {
+    res.status(400).send("Missing Stripe signature");
+    return;
+  }
+
+  let event: Stripe.Event;
+
+  try {
+
+    event = stripe.webhooks.constructEvent(
+      req.rawBody,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET as string
+    );
+
+  } catch (err:any) {
+
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+
+  }
+
+  const db = admin.firestore();
+
+  switch (event.type) {
+
+    case "checkout.session.completed": {
+
+      const session = event.data.object as Stripe.Checkout.Session;
+
+      const userId = session.metadata?.userId;
+
+      if (userId) {
+
+        await db.collection("subscriptions").doc(userId).set(
+        {
+          status: "trialing",
+          stripeCustomerId: session.customer,
+          stripeSubscriptionId: session.subscription,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true });
+
+      }
+
+      break;
+
+    }
+
+  }
+
+  res.json({ received: true });
+
+});
+
+
+// ======================================================
+// ============ EXPIRE TRIAL (BACKUP CHECK) ============
+// ======================================================
+
+export const expireTrialsDaily = onSchedule(
+{
+  schedule: "every 24 hours",
+  region: "us-central1",
+},
+async () => {
+
+  console.log("Trial expiration check executed.");
+
+});
