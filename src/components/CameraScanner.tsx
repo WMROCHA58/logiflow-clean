@@ -12,10 +12,16 @@ export function CameraScanner({ onCapture, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [statusText, setStatusText] = useState("Inicializando câmera...");
+  const [captureLock, setCaptureLock] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     async function startCamera() {
       try {
+        setStatusText("Abrindo câmera...");
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
@@ -24,41 +30,64 @@ export function CameraScanner({ onCapture, onClose }: Props) {
           }
         });
 
+        if (!mounted) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+
         streamRef.current = stream;
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
 
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(() => {});
+          videoRef.current.onloadedmetadata = async () => {
+            try {
+              await videoRef.current?.play();
+            } catch {}
+
+            const track = stream.getVideoTracks()[0];
+            const capabilities: any = track.getCapabilities?.();
+            const constraints: any = { advanced: [] as any[] };
+
+            if (capabilities) {
+              if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+                constraints.advanced.push({ focusMode: "continuous" });
+              }
+
+              if (capabilities.focusDistance && typeof capabilities.focusDistance.max === "number") {
+                constraints.advanced.push({ focusDistance: capabilities.focusDistance.max });
+              }
+
+              if (capabilities.zoom && typeof capabilities.zoom.max === "number" && typeof capabilities.zoom.min === "number") {
+                const saferZoom = Math.max(capabilities.zoom.min, Math.min(1.4, capabilities.zoom.max));
+                constraints.advanced.push({ zoom: saferZoom });
+              }
+            }
+
+            if (constraints.advanced.length > 0) {
+              try {
+                await track.applyConstraints(constraints);
+              } catch {}
+            }
+
+            setTimeout(() => {
+              if (!mounted) return;
+              setCameraReady(true);
+              setStatusText("Centralize a etiqueta e espere a imagem ficar nítida");
+            }, 900);
           };
-
-          const track = stream.getVideoTracks()[0];
-          const capabilities: any = track.getCapabilities?.();
-
-          if (capabilities) {
-            const constraints: any = { advanced: [] };
-
-            if (capabilities.focusMode) {
-              constraints.advanced.push({ focusMode: "continuous" });
-            }
-
-            if (capabilities.zoom) {
-              constraints.advanced.push({ zoom: capabilities.zoom.max * 0.6 });
-            }
-
-            track.applyConstraints(constraints);
-          }
         }
       } catch (err) {
         console.error("Erro câmera:", err);
         alert("Erro ao acessar câmera");
+        setStatusText("Erro ao acessar câmera");
       }
     }
 
     startCamera();
 
     return () => {
+      mounted = false;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
@@ -66,61 +95,64 @@ export function CameraScanner({ onCapture, onClose }: Props) {
     };
   }, []);
 
-  async function capture() {
-    if (!videoRef.current || !canvasRef.current) return;
+  async function wait(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
-    setLoading(true);
+  async function capture() {
+    if (loading || captureLock) return;
+    if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    if (!ctx) {
-      setLoading(false);
-      return;
-    }
+    if (!ctx) return;
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
     if (!vw || !vh) {
       alert("Câmera ainda não está pronta");
-      setLoading(false);
       return;
     }
 
-    // Área horizontal proporcional (mantendo lógica original)
-    const cropWidth = vw * 0.85;
-    const cropHeight = cropWidth * (9 / 16);
-
-    const startX = (vw - cropWidth) / 2;
-    const startY = (vh - cropHeight) / 2;
-
-    // Resolução otimizada para OCR (1024px de largura)
-    canvas.width = 1024;
-    canvas.height = cropHeight * (1024 / cropWidth);
-
-    // Filtro aprimorado para melhor leitura de etiquetas
-    ctx.filter = "contrast(1.8) brightness(1.15) grayscale(0.3)";
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    ctx.drawImage(
-      video,
-      startX,
-      startY,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    // Qualidade JPEG reduzida para 0.8 (equilíbrio entre tamanho e qualidade)
-    const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+    setLoading(true);
+    setCaptureLock(true);
+    setStatusText("Ajustando foco...");
 
     try {
+      await wait(650);
+
+      const cropWidth = vw * 0.78;
+      const cropHeight = cropWidth * (9 / 16);
+      const startX = (vw - cropWidth) / 2;
+      const startY = (vh - cropHeight) / 2;
+
+      canvas.width = 1400;
+      canvas.height = Math.round(cropHeight * (1400 / cropWidth));
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.filter = "contrast(1.28) brightness(1.06) saturate(0.2)";
+
+      ctx.drawImage(
+        video,
+        startX,
+        startY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      setStatusText("Processando etiqueta...");
+
+      const base64 = canvas.toDataURL("image/jpeg", 0.88).split(",")[1];
+
       const scanLabel = httpsCallable(functions, "scanLabel");
       const res: any = await scanLabel({ imageBase64: base64 });
 
@@ -132,9 +164,11 @@ export function CameraScanner({ onCapture, onClose }: Props) {
     } catch (e) {
       console.error("ERRO FRONTEND:", e);
       alert("Erro ao processar a imagem");
+      setStatusText("Centralize a etiqueta e tente novamente");
+    } finally {
+      setLoading(false);
+      setTimeout(() => setCaptureLock(false), 400);
     }
-
-    setLoading(false);
   }
 
   return (
@@ -150,15 +184,15 @@ export function CameraScanner({ onCapture, onClose }: Props) {
         ref={videoRef}
         autoPlay
         playsInline
+        muted
         style={{
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          opacity: 0.95
+          opacity: 0.98
         }}
       />
 
-      {/* MOLDURA HORIZONTAL (SÓ VISUAL) */}
       <div
         style={{
           position: "absolute",
@@ -171,35 +205,56 @@ export function CameraScanner({ onCapture, onClose }: Props) {
       >
         <div
           style={{
-            width: "90%",
-            maxWidth: 560,
+            width: "88%",
+            maxWidth: 520,
             aspectRatio: "16 / 9",
             border: "3px solid #22c55e",
-            borderRadius: 20
+            borderRadius: 20,
+            boxShadow: "0 0 0 9999px rgba(0,0,0,0.30)"
           }}
         />
       </div>
 
-      {/* BOTÃO CAPTURA */}
+      <div
+        style={{
+          position: "absolute",
+          top: 20,
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "white",
+          background: "rgba(0,0,0,0.55)",
+          border: "1px solid rgba(255,255,255,0.18)",
+          padding: "10px 14px",
+          borderRadius: 16,
+          fontSize: 14,
+          fontWeight: 700,
+          maxWidth: "92%",
+          textAlign: "center"
+        }}
+      >
+        {statusText}
+      </div>
+
       <button
         onClick={capture}
-        disabled={loading}
+        disabled={loading || !cameraReady || captureLock}
         style={{
           position: "absolute",
           bottom: 30,
           left: "50%",
           transform: "translateX(-50%)",
-          width: 70,
-          height: 70,
-          borderRadius: 35,
-          background: "#2563eb",
-          border: "4px solid white"
+          width: 74,
+          height: 74,
+          borderRadius: 37,
+          background: loading || !cameraReady || captureLock ? "#6b7280" : "#2563eb",
+          border: "4px solid white",
+          opacity: loading || !cameraReady || captureLock ? 0.78 : 1
         }}
       />
 
-      {/* FECHAR */}
       <button
         onClick={onClose}
+        disabled={loading}
         style={{
           position: "absolute",
           top: 20,
@@ -208,7 +263,8 @@ export function CameraScanner({ onCapture, onClose }: Props) {
           background: "rgba(0,0,0,0.5)",
           border: "none",
           padding: 10,
-          borderRadius: 20
+          borderRadius: 20,
+          fontWeight: 700
         }}
       >
         ✕

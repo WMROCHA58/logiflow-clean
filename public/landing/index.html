@@ -1,44 +1,58 @@
 <!DOCTYPE html>
 <html lang="pt">
+
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>LogiFlow — App para Entregadores</title>
+
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<meta name="theme-color" content="#00FF85">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
 
 <style>
+
 body{
   margin:0;
   font-family:'Poppins',sans-serif;
   background:#050505;
   color:#fff;
 }
+
 .container{
   max-width:1100px;
   margin:auto;
   padding:20px;
 }
+
 .hero{
-  padding:60px 20px;
+  padding:52px 20px 24px;
   text-align:center;
 }
+
 .logo{
   height:48px;
   margin-bottom:28px;
 }
+
 h1{
   font-size:2.6rem;
   line-height:1.1;
   margin-bottom:20px;
 }
+
 .subtitle{
   color:#cbd5e1;
   font-size:1.2rem;
   max-width:650px;
   margin:auto;
-  margin-bottom:30px;
+  margin-bottom:26px;
 }
+
 .btn{
   display:inline-block;
   background:linear-gradient(90deg,#00A3FF,#00FF85);
@@ -52,37 +66,98 @@ h1{
   border:none;
   cursor:pointer;
 }
+
 .section{
-  padding:70px 20px;
+  padding:46px 20px;
   text-align:center;
 }
+
+.features-section{
+  padding-top:24px;
+}
+
+.pricing-section{
+  padding-top:34px;
+  padding-bottom:28px;
+}
+
 .grid{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
   gap:25px;
-  margin-top:40px;
+  margin-top:34px;
 }
+
 .card{
   background:#0f172a;
   padding:30px;
   border-radius:20px;
 }
+
 .price{
   font-size:3rem;
   font-weight:800;
   margin:20px 0;
 }
+
 .highlight{
   color:#00FF85;
   font-weight:700;
 }
+
+.price-note{
+  color:#94a3b8;
+  font-size:0.95rem;
+  max-width:720px;
+  margin:12px auto 18px;
+  line-height:1.5;
+}
+
 footer{
   text-align:center;
-  padding:40px;
+  padding:24px 20px 28px;
   color:#94a3b8;
   font-size:14px;
 }
+
+@media (max-width:768px){
+  .hero{
+    padding:42px 20px 18px;
+  }
+
+  h1{
+    font-size:2.1rem;
+  }
+
+  .subtitle{
+    font-size:1.05rem;
+    margin-bottom:22px;
+  }
+
+  .section{
+    padding:38px 20px;
+  }
+
+  .features-section{
+    padding-top:16px;
+  }
+
+  .pricing-section{
+    padding-top:24px;
+    padding-bottom:20px;
+  }
+
+  .price{
+    font-size:2.5rem;
+  }
+
+  footer{
+    padding:18px 20px 24px;
+  }
+}
+
 </style>
+
 </head>
 
 <body>
@@ -91,75 +166,335 @@ footer{
 
 <img src="/LogiFlow-Pro.png" class="logo" alt="LogiFlow">
 
-<h1>O app profissional para entregadores</h1>
+<h1 id="heroTitle">O app profissional para entregadores</h1>
 
-<p class="subtitle">
+<p class="subtitle" id="heroSubtitle">
 Organize suas entregas, navegue mais rápido e aumente seu lucro diário.
 </p>
 
-<button class="btn" onclick="startTrial()">
+<button class="btn" onclick="startTrial()" id="heroButton">
 Teste grátis por 7 dias
 </button>
 
 </div>
 
-<div class="section container">
+<div class="section container features-section">
 
-<h2>Por que escolher o LogiFlow?</h2>
+<h2 id="whyTitle">Por que escolher o LogiFlow?</h2>
 
 <div class="grid">
 
 <div class="card">
-<h3>Rotas inteligentes</h3>
-<p>Otimização automática de rotas.</p>
+<h3 id="card1Title">Rotas inteligentes</h3>
+<p id="card1Text">Otimização automática de rotas.</p>
 </div>
 
 <div class="card">
-<h3>Comandos de voz</h3>
-<p>Adicione entregas sem tocar na tela.</p>
+<h3 id="card2Title">Comandos de voz</h3>
+<p id="card2Text">Adicione entregas sem tocar na tela.</p>
 </div>
 
 <div class="card">
-<h3>Comprovante de entrega</h3>
-<p>Fotos e assinatura digital.</p>
+<h3 id="card3Title">Comprovante de entrega</h3>
+<p id="card3Text">Fotos e assinatura digital.</p>
 </div>
 
 <div class="card">
-<h3>Controle de lucro</h3>
-<p>Acompanhe ganhos e custos.</p>
+<h3 id="card4Title">Controle de lucro</h3>
+<p id="card4Text">Acompanhe ganhos e custos.</p>
 </div>
 
 <div class="card">
-<h3>Táxi e Motoboy</h3>
-<p>Perfeito para entregadores independentes.</p>
+<h3 id="card5Title">Táxi e Motoboy</h3>
+<p id="card5Text">Perfeito para entregadores independentes.</p>
 </div>
 
 </div>
 </div>
 
-<div class="section container">
+<div class="section container pricing-section">
 
-<h2>Preço simples</h2>
+<h2 id="priceTitle">Preço simples</h2>
 
-<p class="price">
+<p class="price" id="priceDisplay">
 R$ 29,97 <span style="font-size:1rem;">/ mês</span>
 </p>
 
-<p><span class="highlight">7 dias grátis</span></p>
+<p><span class="highlight" id="trialText">7 dias grátis</span></p>
 
-<button class="btn" onclick="startTrial()">
+<p class="price-note" id="priceNote">
+O valor pode ter pequena variação de acordo com a moeda local e a cotação do dia no checkout.
+</p>
+
+<button class="btn" onclick="startTrial()" id="bottomButton">
 Começar agora
 </button>
 
 </div>
 
-<footer>© 2026 LogiFlow — Todos os direitos reservados</footer>
+<footer id="footerText">© 2026 LogiFlow — Todos os direitos reservados</footer>
 
 <script>
+
 function startTrial(){
   window.location.href = "/";
 }
+
+(function(){
+
+  const brlPrice = 29.97;
+
+  const translations = {
+    pt: {
+      lang: "pt",
+      title: "LogiFlow — App para Entregadores",
+      heroTitle: "O app profissional para entregadores",
+      heroSubtitle: "Organize suas entregas, navegue mais rápido e aumente seu lucro diário.",
+      heroButton: "Teste grátis por 7 dias",
+      whyTitle: "Por que escolher o LogiFlow?",
+      card1Title: "Rotas inteligentes",
+      card1Text: "Otimização automática de rotas.",
+      card2Title: "Comandos de voz",
+      card2Text: "Adicione entregas sem tocar na tela.",
+      card3Title: "Comprovante de entrega",
+      card3Text: "Fotos e assinatura digital.",
+      card4Title: "Controle de lucro",
+      card4Text: "Acompanhe ganhos e custos.",
+      card5Title: "Táxi e Motoboy",
+      card5Text: "Perfeito para entregadores independentes.",
+      priceTitle: "Preço simples",
+      trialText: "7 dias grátis",
+      bottomButton: "Começar agora",
+      priceNote: "O valor pode ter pequena variação de acordo com a moeda local e a cotação do dia no checkout.",
+      footerText: "© 2026 LogiFlow — Todos os direitos reservados"
+    },
+    es: {
+      lang: "es",
+      title: "LogiFlow — App para Repartidores",
+      heroTitle: "La app profesional para repartidores",
+      heroSubtitle: "Organiza tus entregas, navega más rápido y aumenta tus ganancias diarias.",
+      heroButton: "Prueba gratis por 7 días",
+      whyTitle: "¿Por qué elegir LogiFlow?",
+      card1Title: "Rutas inteligentes",
+      card1Text: "Optimización automática de rutas.",
+      card2Title: "Comandos de voz",
+      card2Text: "Agrega entregas sin tocar la pantalla.",
+      card3Title: "Comprobante de entrega",
+      card3Text: "Fotos y firma digital.",
+      card4Title: "Control de ganancias",
+      card4Text: "Sigue tus ingresos y costos.",
+      card5Title: "Taxi y Motoboy",
+      card5Text: "Perfecto para repartidores independientes.",
+      priceTitle: "Precio simple",
+      trialText: "7 días gratis",
+      bottomButton: "Comenzar ahora",
+      priceNote: "El valor puede tener una pequeña variación según la moneda local y el tipo de cambio del día en el checkout.",
+      footerText: "© 2026 LogiFlow — Todos los derechos reservados"
+    },
+    en: {
+      lang: "en",
+      title: "LogiFlow — Delivery App for Drivers",
+      heroTitle: "The professional app for delivery drivers",
+      heroSubtitle: "Organize your deliveries, navigate faster and increase your daily profit.",
+      heroButton: "Try it free for 7 days",
+      whyTitle: "Why choose LogiFlow?",
+      card1Title: "Smart routes",
+      card1Text: "Automatic route optimization.",
+      card2Title: "Voice commands",
+      card2Text: "Add deliveries without touching the screen.",
+      card3Title: "Proof of delivery",
+      card3Text: "Photos and digital signature.",
+      card4Title: "Profit control",
+      card4Text: "Track earnings and costs.",
+      card5Title: "Taxi and Motoboy",
+      card5Text: "Perfect for independent delivery drivers.",
+      priceTitle: "Simple pricing",
+      trialText: "7 days free",
+      bottomButton: "Start now",
+      priceNote: "The amount may vary slightly depending on the local currency and the exchange rate of the day at checkout.",
+      footerText: "© 2026 LogiFlow — All rights reserved"
+    }
+  };
+
+  const exchangeRates = {
+    BRL: 1,
+    USD: 0.20,
+    EUR: 0.18,
+    GBP: 0.15,
+    CAD: 0.27,
+    AUD: 0.31,
+    MXN: 3.36,
+    ARS: 214.00,
+    CLP: 190.00,
+    COP: 790.00,
+    PEN: 0.74,
+    UYU: 8.10,
+    PYG: 1500.00,
+    BOB: 1.38,
+    CRC: 101.00,
+    GTQ: 1.55,
+    HNL: 4.95,
+    NIO: 7.35,
+    PAB: 0.20,
+    DOP: 12.10,
+    CUP: 4.80,
+    JPY: 29.60,
+    CHF: 0.18
+  };
+
+  const localeToCurrency = {
+    "pt-BR": "BRL",
+    "pt-PT": "EUR",
+
+    "en-US": "USD",
+    "en-GB": "GBP",
+    "en-CA": "CAD",
+    "en-AU": "AUD",
+    "en-NZ": "USD",
+    "en-IE": "EUR",
+
+    "de-DE": "EUR",
+    "fr-FR": "EUR",
+    "it-IT": "EUR",
+    "es-ES": "EUR",
+    "pt-AO": "USD",
+    "pt-MZ": "USD",
+
+    "es-AR": "ARS",
+    "es-BO": "BOB",
+    "es-CL": "CLP",
+    "es-CO": "COP",
+    "es-EC": "USD",
+    "es-GQ": "EUR",
+    "es-PY": "PYG",
+    "es-PE": "PEN",
+    "es-UY": "UYU",
+    "es-VE": "USD",
+
+    "es-MX": "MXN",
+
+    "es-CR": "CRC",
+    "es-GT": "GTQ",
+    "es-HN": "HNL",
+    "es-NI": "NIO",
+    "es-PA": "PAB",
+    "es-SV": "USD",
+    "es-BZ": "USD",
+
+    "es-CU": "CUP",
+    "es-DO": "DOP",
+    "es-PR": "USD",
+
+    "es-US": "USD",
+    "es-419": "USD",
+
+    "ja-JP": "JPY",
+    "de-CH": "CHF",
+    "fr-CH": "CHF",
+    "it-CH": "CHF"
+  };
+
+  const currencyToLocale = {
+    BRL: "pt-BR",
+    USD: "en-US",
+    EUR: "es-ES",
+    GBP: "en-GB",
+    CAD: "en-CA",
+    AUD: "en-AU",
+    MXN: "es-MX",
+    ARS: "es-AR",
+    CLP: "es-CL",
+    COP: "es-CO",
+    PEN: "es-PE",
+    UYU: "es-UY",
+    PYG: "es-PY",
+    BOB: "es-BO",
+    CRC: "es-CR",
+    GTQ: "es-GT",
+    HNL: "es-HN",
+    NIO: "es-NI",
+    PAB: "es-PA",
+    DOP: "es-DO",
+    CUP: "es-CU",
+    JPY: "ja-JP",
+    CHF: "de-CH"
+  };
+
+  const suffixByLanguage = {
+    pt: "/ mês",
+    es: "/ mes",
+    en: "/ month"
+  };
+
+  const browserLocale = (navigator.language || "pt-BR").trim();
+  const language = browserLocale.split("-")[0].toLowerCase();
+
+  let selectedLanguage = "pt";
+  if(language === "es") selectedLanguage = "es";
+  else if(language === "en") selectedLanguage = "en";
+
+  const t = translations[selectedLanguage];
+
+  document.documentElement.lang = t.lang;
+  document.title = t.title;
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = value;
+  };
+
+  setText("heroTitle", t.heroTitle);
+  setText("heroSubtitle", t.heroSubtitle);
+  setText("heroButton", t.heroButton);
+  setText("whyTitle", t.whyTitle);
+  setText("card1Title", t.card1Title);
+  setText("card1Text", t.card1Text);
+  setText("card2Title", t.card2Title);
+  setText("card2Text", t.card2Text);
+  setText("card3Title", t.card3Title);
+  setText("card3Text", t.card3Text);
+  setText("card4Title", t.card4Title);
+  setText("card4Text", t.card4Text);
+  setText("card5Title", t.card5Title);
+  setText("card5Text", t.card5Text);
+  setText("priceTitle", t.priceTitle);
+  setText("trialText", t.trialText);
+  setText("priceNote", t.priceNote);
+  setText("bottomButton", t.bottomButton);
+  setText("footerText", t.footerText);
+
+  let currency = localeToCurrency[browserLocale];
+
+  if(!currency){
+    if(language === "pt") currency = "BRL";
+    else if(language === "es") currency = "USD";
+    else if(language === "en") currency = "USD";
+    else if(language === "de" || language === "fr" || language === "it") currency = "EUR";
+    else if(language === "ja") currency = "JPY";
+    else currency = "BRL";
+  }
+
+  const rate = exchangeRates[currency] || 1;
+  const converted = brlPrice * rate;
+  const localeForFormat = currencyToLocale[currency] || "pt-BR";
+  const suffix = suffixByLanguage[selectedLanguage] || "/ mês";
+
+  const formatted = new Intl.NumberFormat(localeForFormat, {
+    style: "currency",
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(converted);
+
+  const priceDisplay = document.getElementById("priceDisplay");
+  if(priceDisplay){
+    priceDisplay.innerHTML = `${formatted} <span style="font-size:1rem;">${suffix}</span>`;
+  }
+
+})();
+
 </script>
 
 </body>
+
 </html>
